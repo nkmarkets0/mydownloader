@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b1020">
+  <title>QuickSave — Video & Audio Downloader</title>
+  <style>
+    :root{color-scheme:dark;--bg:#0b1020;--panel:#121a2e;--panel2:#18233b;--text:#eef3ff;--muted:#9aa9c5;--line:#293653;--accent:#7c9cff;--accent2:#54dfbd;--danger:#ff8794}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(900px 500px at 15% -10%,#24345d 0%,transparent 60%),var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;display:grid;place-items:center;padding:24px}
+    .wrap{width:min(760px,100%)}.brand{display:flex;align-items:center;gap:12px;margin-bottom:22px}.logo{width:44px;height:44px;border-radius:14px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center;color:#081321;font-size:23px;font-weight:900}.brand h1{font-size:20px;margin:0}.brand p{margin:2px 0 0;color:var(--muted);font-size:13px}
+    .card{background:linear-gradient(180deg,rgba(24,35,59,.96),rgba(18,26,46,.98));border:1px solid var(--line);border-radius:22px;padding:clamp(20px,4vw,32px);box-shadow:0 24px 80px #0006}
+    h2{font-size:clamp(25px,5vw,34px);line-height:1.15;margin:0 0 9px;letter-spacing:-.7px}.sub{color:var(--muted);margin:0 0 25px}
+    label{display:block;font-size:13px;font-weight:650;margin:0 0 8px;color:#dce6fb}.urlrow{display:flex;gap:9px}.urlrow input{flex:1;min-width:0}
+    input,select{width:100%;height:48px;border:1px solid var(--line);border-radius:12px;background:#0c1427;color:var(--text);padding:0 13px;font:inherit;outline:none}input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px #7c9cff22}
+    button{border:0;border-radius:12px;padding:0 18px;background:linear-gradient(135deg,var(--accent),#9c8cff);color:#081321;font-weight:800;font-size:14px;cursor:pointer;min-height:46px}button:hover{filter:brightness(1.08)}button:disabled{opacity:.55;cursor:wait}.paste{background:#243453;color:#eaf0ff;border:1px solid #34496f}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:20px}.hint{font-size:12px;color:var(--muted);margin-top:8px}
+    .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}.primary{flex:1;min-width:180px}.secondary{background:#243453;color:#eaf0ff;border:1px solid #34496f}
+    .status{display:none;margin-top:18px;padding:14px 15px;border-radius:12px;background:#0c1427;border:1px solid var(--line);color:#dce6fb}.status.show{display:block}.status.error{border-color:#81414d;color:#ffd5da}.status.good{border-color:#286c60;color:#c8fff0}
+    .progress{height:7px;background:#26334e;border-radius:99px;overflow:hidden;margin-top:10px;display:none}.bar{height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .2s}
+    .note{margin-top:22px;padding-top:18px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}.note strong{color:#dce6fb}.footer{text-align:center;color:#7786a3;font-size:12px;margin-top:16px}
+    @media(max-width:560px){body{padding:14px}.urlrow{flex-direction:column}.urlrow button{width:100%}.grid{grid-template-columns:1fr}.actions button{width:100%}}
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <header class="brand"><div class="logo">↓</div><div><h1>QuickSave</h1><p>Simple video & audio downloader</p></div></header>
+    <section class="card">
+      <h2>Download media</h2>
+      <p class="sub">Paste a direct media-file link to save an MP4, MP3, or other supported file.</p>
+      <form id="downloadForm">
+        <label for="mediaUrl">Media URL</label>
+        <div class="urlrow">
+          <input id="mediaUrl" type="url" placeholder="https://example.com/video.mp4" autocomplete="url" required>
+          <button class="paste" type="button" id="pasteBtn">Paste</button>
+        </div>
+        <div class="hint">Use a direct link to a media file that you own or are allowed to download.</div>
+        <div class="grid">
+          <div><label for="format">File type</label><select id="format"><option value="original">Keep original format</option><option value="mp4">MP4 video (direct MP4 link)</option><option value="mp3">MP3 audio (direct MP3 link)</option></select></div>
+          <div><label for="filename">Save as (optional)</label><input id="filename" type="text" placeholder="my-video"></div>
+        </div>
+        <div class="actions">
+          <button class="primary" id="downloadBtn" type="submit">↓ &nbsp; Download file</button>
+          <button class="secondary" id="openBtn" type="button">Open link</button>
+        </div>
+      </form>
+      <div id="status" class="status" role="status" aria-live="polite"></div>
+      <div id="progress" class="progress"><div class="bar" id="bar"></div></div>
+      <div class="note"><strong>Important:</strong> This is a GitHub Pages–compatible, frontend-only page. A static HTML/CSS/JavaScript site cannot extract or convert videos from YouTube, Instagram, or Facebook. Those platforms require their permitted download features or a separately hosted backend. This page can attempt to fetch direct media URLs; some websites block browser downloads with CORS or other restrictions.</div>
+    </section>
+    <div class="footer">QuickSave · Runs in your browser · No account required</div>
+  </main>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const form = $('downloadForm'), urlInput = $('mediaUrl'), statusBox = $('status');
+  const downloadBtn = $('downloadBtn'), progress = $('progress'), bar = $('bar');
+
+  function message(text, kind='') {
+    statusBox.textContent = text;
+    statusBox.className = 'status show' + (kind ? ' ' + kind : '');
+  }
+  function cleanName(value) {
+    return (value || 'download').trim().replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, '-').slice(0,100) || 'download';
+  }
+  function validHttpUrl(value) {
+    const u = new URL(value);
+    if (!['http:', 'https:'].includes(u.protocol)) throw new Error('Only HTTP and HTTPS links are supported.');
+    return u;
+  }
+  $('pasteBtn').addEventListener('click', async () => {
+    try { urlInput.value = await navigator.clipboard.readText(); message('Link pasted.'); }
+    catch { message('Clipboard access was blocked. Paste the link into the box manually.', 'error'); }
+  });
+  $('openBtn').addEventListener('click', () => {
+    try { const u = validHttpUrl(urlInput.value.trim()); window.open(u.href, '_blank', 'noopener,noreferrer'); }
+    catch(e) { message(e.message || 'Enter a valid URL.', 'error'); }
+  });
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    let url;
+    try { url = validHttpUrl(urlInput.value.trim()); }
+    catch(e) { message(e.message || 'Enter a valid URL.', 'error'); return; }
+
+    const selected = $('format').value;
+    const path = url.pathname.toLowerCase();
+    if (/youtube\.com|youtu\.be|instagram\.com|facebook\.com/.test(url.hostname)) {
+      message('This is a social-platform page link. GitHub Pages cannot extract its video/audio. Use the platform’s official download option, or connect a separately hosted backend.', 'error');
+      return;
+    }
+    if (selected === 'mp4' && !path.endsWith('.mp4')) {
+      message('For MP4 mode, provide a direct URL ending in .mp4. This page cannot convert other formats.', 'error'); return;
+    }
+    if (selected === 'mp3' && !path.endsWith('.mp3')) {
+      message('For MP3 mode, provide a direct URL ending in .mp3. This page cannot convert audio formats.', 'error'); return;
+    }
+
+    downloadBtn.disabled = true; progress.style.display = 'block'; bar.style.width = '8%';
+    message('Trying to retrieve the direct media file…');
+    try {
+      // Browser fetch is subject to the remote server's CORS policy.
+      const response = await fetch(url.href);
+      if (!response.ok) throw new Error('The server returned HTTP ' + response.status + '.');
+      const blob = await response.blob();
+      if (!blob.size) throw new Error('The server returned an empty file.');
+      bar.style.width = '100%';
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const ext = selected === 'mp4' ? '.mp4' : selected === 'mp3' ? '.mp3' : '';
+      let name = cleanName($('filename').value || decodeURIComponent(url.pathname.split('/').pop().split('?')[0]).replace(/\.[^.]+$/, '') || 'download');
+      a.href = objectUrl; a.download = name + ext; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+      message('Download started. If the browser asks, choose where to save the file.', 'good');
+    } catch (e) {
+      const isCors = e instanceof TypeError;
+      message(isCors
+        ? 'The remote website blocked browser access (often due to CORS). Try its official download link, or use a media host that allows browser downloads. No conversion or social-platform extraction is performed here.'
+        : (e.message || 'Download failed. The link may be unavailable or protected.'), 'error');
+      bar.style.width = '0%';
+    } finally {
+      downloadBtn.disabled = false;
+      setTimeout(() => { progress.style.display = 'none'; }, 1200);
+    }
+  });
+</script>
+</body>
+</html>
